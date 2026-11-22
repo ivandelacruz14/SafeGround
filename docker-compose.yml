@@ -1,0 +1,20 @@
+# Phase 1 runs MySQL in Docker; Flask and Vite run on the host. OpenTripPlanner joins in Phase 3.
+services:
+  db:
+    image: mysql:8.4
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?set in .env}
+      MYSQL_DATABASE: saferoute
+      MYSQL_USER: saferoute
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:?set in .env}
+    command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
+    ports: ["127.0.0.1:3306:3306"]
+    volumes: ["dbdata:/var/lib/mysql"]
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p$$MYSQL_ROOT_PASSWORD --silent"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+volumes:
+  dbdata:

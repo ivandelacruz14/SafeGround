@@ -1,0 +1,45 @@
+openapi: 3.0.3
+info:
+  title: SafeRoute API
+  version: 0.1.0
+  description: >-
+    Phase 1 endpoints. Errors use an object with an error key holding code, message and optional details. Access tokens go in the Authorization Bearer header. The refresh token is an httpOnly cookie, so send X-CSRF-TOKEN taken from the csrf_refresh_token cookie.
+servers: [{url: /api/v1}]
+components:
+  securitySchemes:
+    bearer: {type: http, scheme: bearer, bearerFormat: JWT}
+  schemas:
+    Error:
+      type: object
+      properties:
+        error: {type: object, properties: {code: {type: string}, message: {type: string}, details: {type: object}}}
+    User:
+      type: object
+      properties: {id: {type: integer}, email: {type: string}, display_name: {type: string}, role: {type: string, enum: [user, moderator, admin]}, status: {type: string}, email_verified: {type: boolean}}
+    Page:
+      type: object
+      properties: {items: {type: array, items: {}}, page: {type: integer}, per_page: {type: integer}, total: {type: integer}, pages: {type: integer}}
+  responses:
+    Err: {description: Error, content: {application/json: {schema: {$ref: '#/components/schemas/Error'}}}}
+paths:
+  /health: {get: {tags: [system], summary: Liveness and database check, responses: {'200': {description: ok}, '503': {description: database unavailable}}}}
+  /auth/register: {post: {tags: [auth], summary: Create account (same response whether or not the email exists), requestBody: {content: {application/json: {schema: {type: object, required: [email, password, display_name], properties: {email: {type: string}, password: {type: string, minLength: 10}, display_name: {type: string}}}}}}, responses: {'201': {description: Accepted}, '422': {$ref: '#/components/responses/Err'}, '429': {$ref: '#/components/responses/Err'}}}}
+  /auth/verify-email: {post: {tags: [auth], summary: Confirm email with emailed token, requestBody: {content: {application/json: {schema: {type: object, properties: {token: {type: string}}}}}}, responses: {'200': {description: Verified}, '400': {$ref: '#/components/responses/Err'}}}}
+  /auth/resend-verification: {post: {tags: [auth], summary: Resend verification email, responses: {'200': {description: Accepted}}}}
+  /auth/login: {post: {tags: [auth], summary: Sign in, responses: {'200': {description: Access token and user; sets refresh cookie}, '401': {$ref: '#/components/responses/Err'}, '403': {$ref: '#/components/responses/Err'}}}}
+  /auth/refresh: {post: {tags: [auth], summary: Rotate tokens using refresh cookie, responses: {'200': {description: New access token}, '401': {$ref: '#/components/responses/Err'}}}}
+  /auth/logout: {post: {tags: [auth], summary: Clear refresh cookie, responses: {'200': {description: Signed out}}}}
+  /users/me: {get: {tags: [users], security: [{bearer: []}], summary: Current user, responses: {'200': {description: User}}}, patch: {tags: [users], security: [{bearer: []}], summary: Update display name, responses: {'200': {description: User}}}}
+  /users/me/password: {post: {tags: [users], security: [{bearer: []}], summary: Change password, responses: {'200': {description: Updated}, '403': {$ref: '#/components/responses/Err'}}}}
+  /users/me/preferences: {get: {tags: [users], security: [{bearer: []}], summary: Get preferences, responses: {'200': {description: Preferences}}}, put: {tags: [users], security: [{bearer: []}], summary: Update preferences, responses: {'200': {description: Preferences}, '422': {$ref: '#/components/responses/Err'}}}}
+  /users/me/saved-places: {get: {tags: [users], security: [{bearer: []}], summary: List own saved places, responses: {'200': {description: Places}}}, post: {tags: [users], security: [{bearer: []}], summary: Save a place with lat, lng and label, responses: {'201': {description: Created}, '409': {$ref: '#/components/responses/Err'}}}}
+  /users/me/saved-places/{id}: {delete: {tags: [users], security: [{bearer: []}], summary: Delete own saved place, parameters: [{name: id, in: path, required: true, schema: {type: integer}}], responses: {'204': {description: Deleted}, '404': {$ref: '#/components/responses/Err'}}}}
+  /transport/modes: {get: {tags: [transport], summary: Supported transport modes, responses: {'200': {description: Modes}}}}
+  /transport/stops: {get: {tags: [transport], summary: Stops (imported or entered; each has verification_status and source), parameters: [{name: bbox, in: query, description: 'west,south,east,north (max 1.5 degrees per side)', schema: {type: string}}, {name: mode, in: query, schema: {type: string}}, {name: verification_status, in: query, schema: {type: string}}, {name: page, in: query, schema: {type: integer}}, {name: per_page, in: query, schema: {type: integer, maximum: 500}}], responses: {'200': {description: Page of stops}, '400': {$ref: '#/components/responses/Err'}}}}
+  /transport/routes: {get: {tags: [transport], summary: Routes, parameters: [{name: mode, in: query, schema: {type: string}}, {name: q, in: query, schema: {type: string}}], responses: {'200': {description: Page of routes}}}}
+  /map/layers: {get: {tags: [map], summary: Layer catalogue with availability status with status available or no_data or planned, responses: {'200': {description: Layers}}}}
+  /geocode/search: {get: {tags: [map], summary: Place search via OpenStreetMap Nominatim, parameters: [{name: q, in: query, required: true, schema: {type: string, minLength: 3}}], responses: {'200': {description: Results with attribution}, '503': {$ref: '#/components/responses/Err'}}}}
+  /admin/users: {get: {tags: [admin], security: [{bearer: []}], summary: List users (admin), parameters: [{name: q, in: query, schema: {type: string}}, {name: role, in: query, schema: {type: string}}, {name: status, in: query, schema: {type: string}}], responses: {'200': {description: Page of users}, '403': {$ref: '#/components/responses/Err'}}}}
+  /admin/users/{id}: {patch: {tags: [admin], security: [{bearer: []}], summary: Change role or status (audited), parameters: [{name: id, in: path, required: true, schema: {type: integer}}], responses: {'200': {description: User}, '409': {$ref: '#/components/responses/Err'}}}}
+  /admin/audit-logs: {get: {tags: [admin], security: [{bearer: []}], summary: Audit log (admin), responses: {'200': {description: Page of entries}}}}
+  /admin/data-sources: {get: {tags: [admin], security: [{bearer: []}], summary: Data sources and verified access status for admin or moderator, responses: {'200': {description: Sources}}}}
